@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Weather Prediction · Decision Tree Model</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #273549;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent2: #818cf8;
+      --success: #34d399;
+      --warn: #fb923c;
+      --danger: #f87171;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0c4a6e 0%, #1e1b4b 100%);
+      padding: 3rem 1.5rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    header h1 {
+      font-size: clamp(1.8rem, 5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #38bdf8, #818cf8, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: .5rem;
+      font-size: 1.05rem;
+    }
+    .badges {
+      display: flex;
+      gap: .5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .badge {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 999px;
+      padding: .25rem .75rem;
+      font-size: .78rem;
+      color: var(--muted);
+    }
+    .badge span { color: var(--accent); font-weight: 600; }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: grid;
+      gap: 2rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      main { grid-template-columns: 380px 1fr; }
+      .full-width { grid-column: 1 / -1; }
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .card h2 .icon { font-size: 1.2rem; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 1.25rem; }
+    label {
+      display: block;
+      font-size: .85rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: .4rem;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+      height: 6px;
+    }
+    .range-display {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: .4rem;
+    }
+    .range-val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .range-minmax { font-size: .75rem; color: var(--border); }
+
+    .btn-predict {
+      width: 100%;
+      padding: .85rem;
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      letter-spacing: .02em;
+    }
+    .btn-predict:hover { opacity: .9; transform: translateY(-1px); }
+    .btn-predict:active { transform: translateY(0); }
+
+    /* ── Result ── */
+    #result-card {
+      display: none;
+    }
+    .result-main {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: var(--surface2);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .result-icon { font-size: 3rem; }
+    .result-label { font-size: .8rem; color: var(--muted); }
+    .result-prediction {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    .result-confidence {
+      font-size: .9rem;
+      color: var(--success);
+      margin-top: .2rem;
+    }
+
+    .prob-bars { display: flex; flex-direction: column; gap: .5rem; }
+    .prob-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 44px;
+      align-items: center;
+      gap: .5rem;
+      font-size: .8rem;
+    }
+    .prob-label { color: var(--muted); }
+    .prob-bar-bg {
+      background: var(--surface2);
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .prob-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width .5s ease;
+    }
+    .prob-pct { color: var(--text); text-align: right; }
+
+    /* ── Decision path ── */
+    .path-steps { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+    .path-step {
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+      padding: .6rem .8rem;
+      border-radius: 8px;
+      font-size: .82rem;
+    }
+    .path-step.condition { background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.2); }
+    .path-step.leaf { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.2); }
+    .path-num {
+      background: var(--accent);
+      color: #000;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      font-size: .7rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .path-step.leaf .path-num { background: var(--success); }
+
+    /* ── Stats grid ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-box {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: .85rem;
+      text-align: center;
+    }
+    .stat-num { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+    .stat-lbl { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+
+    /* ── Chart wrappers ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 640px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-box { background: var(--surface2); border-radius: 8px; padding: 1rem; }
+    .chart-box h3 { font-size: .8rem; color: var(--muted); margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+    .chart-container { position: relative; height: 220px; }
+
+    /* ── Tree visualizer ── */
+    .tree-svg-wrap {
+      overflow-x: auto;
+      padding-bottom: .5rem;
+    }
+    #tree-svg {
+      min-width: 900px;
+      font-family: inherit;
+    }
+    .tree-node rect { rx: 6; ry: 6; }
+    .tree-node text { font-size: 10px; fill: var(--text); }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-size: .8rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌦 UK Weather Prediction</h1>
+  <p>Decision Tree Machine Learning Model trained on 3,285 daily records across 9 UK cities</p>
+  <div class="badges">
+    <div class="badge">Algorithm: <span>Decision Tree (CART)</span></div>
+    <div class="badge">Records: <span>3,285</span></div>
+    <div class="badge">Cities: <span>9</span></div>
+    <div class="badge">Classes: <span>8 Weather Types</span></div>
+    <div class="badge">Max Depth: <span>6</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Predictor -->
+  <div>
+    <div class="card">
+      <h2><span class="icon">🎛️</span> Input Parameters</h2>
+
+      <div class="form-group">
+        <label>Temperature (°C)</label>
+        <input type="range" id="temp" min="-15" max="30" step="0.5" value="10" oninput="updateDisplay()">
+        <div class="range-display">
+          <span class="range-minmax">-15°C</span>
+          <span class="range-val" id="temp-val">10.0°C</span>
+          <span class="range-minmax">30°C</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Humidity (%)</label>
+        <input type="range" id="humidity" min="60" max="95" step="0.5" value="75" oninput="updateDisplay()">
+        <div class="range-display">
+          <span class="range-minmax">60%</span>
+          <span class="range-val" id="humidity-val">75.0%</span>
+          <span class="range-minmax">95%</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Precipitation (mm)</label>
+        <input type="range" id="precip" min="0" max="20" step="0.1" value="0" oninput="updateDisplay()">
+        <div class="range-display">
+          <span class="range-minmax">0 mm</span>
+          <span class="range-val" id="precip-val">0.0 mm</span>
+          <span class="range-minmax">20 mm</span>
+        </div>
+      </div>
+
+      <button class="btn-predict" onclick="predict()">⚡ Predict Weather Condition</button>
+    </div>
+
+    <!-- Result -->
+    <div class="card" id="result-card" style="margin-top:1.5rem">
+      <h2><span class="icon">🔮</span> Prediction Result</h2>
+      <div class="result-main">
+        <div class="result-icon" id="result-icon">☁️</div>
+        <div>
+          <div class="result-label">Predicted Condition</div>
+          <div class="result-prediction" id="result-pred">—</div>
+          <div class="result-confidence" id="result-conf">—</div>
+        </div>
+      </div>
+      <h3 style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Class Probabilities</h3>
+      <div class="prob-bars" id="prob-bars"></div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div>
+    <!-- Decision Path -->
+    <div class="card" id="path-card" style="display:none">
+      <h2><span class="icon">🌲</span> Decision Path</h2>
+      <div class="path-steps" id="path-steps"></div>
+    </div>
+
+    <!-- Dataset Stats -->
+    <div class="card" style="margin-top:1.5rem" id="stats-card">
+      <h2><span class="icon">📊</span> Dataset Overview</h2>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-num">3,285</div><div class="stat-lbl">Total Records</div></div>
+        <div class="stat-box"><div class="stat-num">9</div><div class="stat-lbl">UK Cities</div></div>
+        <div class="stat-box"><div class="stat-num">8</div><div class="stat-lbl">Weather Types</div></div>
+        <div class="stat-box"><div class="stat-num">365</div><div class="stat-lbl">Days / City</div></div>
+        <div class="stat-box"><div class="stat-num">2023</div><div class="stat-lbl">Year</div></div>
+        <div class="stat-box"><div class="stat-num">6</div><div class="stat-lbl">Tree Depth</div></div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-box">
+          <h3>Weather Distribution</h3>
+          <div class="chart-container"><canvas id="distChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <h3>Temperature by Condition (avg)</h3>
+          <div class="chart-container"><canvas id="tempChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Built with scikit-learn Decision Tree · Trained on UK Weather Data 2023 · Deployed via GitHub Pages
+</footer>
+
+<script>
+// ── Decision Tree Model (exported from scikit-learn) ──────────────────────
+const TREE = {"feature":"precipitation_mm","threshold":5.05,"left":{"feature":"humidity_percent","threshold":90.05,"left":{"feature":"temperature_celsius","threshold":15.05,"left":{"feature":"temperature_celsius","threshold":10.35,"left":{"feature":"humidity_percent","threshold":74.55,"left":{"feature":"temperature_celsius","threshold":9.25,"left":{"prediction":"Cloudy","confidence":21.5,"probabilities":{"Cloudy":0.215,"Foggy":0.168,"Overcast":0.17,"Rainy":0.142,"Snowy":0.146,"Sunny":0.158}},"right":{"prediction":"Rainy","confidence":28.1,"probabilities":{"Cloudy":0.125,"Foggy":0.062,"Overcast":0.031,"Rainy":0.281,"Snowy":0.25,"Sunny":0.25}}},"right":{"feature":"temperature_celsius","threshold":9.25,"left":{"prediction":"Overcast","confidence":20.0,"probabilities":{"Cloudy":0.138,"Foggy":0.149,"Overcast":0.2,"Rainy":0.185,"Snowy":0.164,"Sunny":0.164}},"right":{"prediction":"Foggy","confidence":40.0,"probabilities":{"Cloudy":0.089,"Foggy":0.4,"Overcast":0.2,"Rainy":0.111,"Snowy":0.133,"Sunny":0.067}}}},"right":{"feature":"precipitation_mm","threshold":4.15,"left":{"feature":"humidity_percent","threshold":86.7,"left":{"prediction":"Cloudy","confidence":20.2,"probabilities":{"Cloudy":0.202,"Foggy":0.125,"Overcast":0.143,"Rainy":0.151,"Snowy":0.188,"Sunny":0.191}},"right":{"prediction":"Sunny","confidence":37.0,"probabilities":{"Cloudy":0.037,"Foggy":0.037,"Overcast":0.148,"Rainy":0.259,"Snowy":0.148,"Sunny":0.37}}},"right":{"prediction":"Sunny","confidence":44.8,"probabilities":{"Cloudy":0.069,"Foggy":0.034,"Overcast":0.069,"Rainy":0.207,"Snowy":0.172,"Sunny":0.448}}}},"right":{"feature":"precipitation_mm","threshold":0.05,"left":{"feature":"temperature_celsius","threshold":17.8,"left":{"feature":"humidity_percent","threshold":73.75,"left":{"prediction":"Partly Cloudy","confidence":70.0,"probabilities":{"Partly Cloudy":0.7,"Sunny":0.3}},"right":{"prediction":"Sunny","confidence":52.8,"probabilities":{"Partly Cloudy":0.472,"Sunny":0.528}}},"right":{"prediction":"Sunny","confidence":69.7,"probabilities":{"Partly Cloudy":0.303,"Sunny":0.697}}},"right":{"feature":"humidity_percent","threshold":70.05,"left":{"prediction":"Overcast","confidence":35.7,"probabilities":{"Cloudy":0.107,"Foggy":0.179,"Overcast":0.357,"Rainy":0.179,"Snowy":0.071,"Sunny":0.107}},"right":{"feature":"temperature_celsius","threshold":17.25,"left":{"prediction":"Rainy","confidence":28.1,"probabilities":{"Foggy":0.25,"Overcast":0.062,"Rainy":0.281,"Snowy":0.188,"Sunny":0.219}},"right":{"prediction":"Rainy","confidence":33.3,"probabilities":{"Cloudy":0.208,"Foggy":0.208,"Overcast":0.125,"Rainy":0.333,"Snowy":0.083,"Sunny":0.042}}}}}},"right":{"feature":"humidity_percent","threshold":90.85,"left":{"feature":"precipitation_mm","threshold":0.1,"left":{"prediction":"Foggy","confidence":50.0,"probabilities":{"Cloudy":0.214,"Foggy":0.5,"Overcast":0.286}},"right":{"prediction":"Cloudy","confidence":68.2,"probabilities":{"Cloudy":0.682,"Foggy":0.318}}},"right":{"feature":"humidity_percent","threshold":91.65,"left":{"prediction":"Overcast","confidence":54.1,"probabilities":{"Cloudy":0.324,"Foggy":0.135,"Overcast":0.541}},"right":{"feature":"temperature_celsius","threshold":12.35,"left":{"feature":"temperature_celsius","threshold":-1.75,"left":{"prediction":"Overcast","confidence":41.3,"probabilities":{"Cloudy":0.196,"Foggy":0.391,"Overcast":0.413}},"right":{"prediction":"Cloudy","confidence":38.3,"probabilities":{"Cloudy":0.383,"Foggy":0.34,"Overcast":0.277}}},"right":{"prediction":"Overcast","confidence":65.4,"probabilities":{"Cloudy":0.231,"Foggy":0.115,"Overcast":0.654}}}}}},"right":{"feature":"precipitation_mm","threshold":11.25,"left":{"feature":"precipitation_mm","threshold":8.95,"left":{"feature":"temperature_celsius","threshold":-3.95,"left":{"feature":"humidity_percent","threshold":78.6,"left":{"prediction":"Heavy Rain","confidence":51.5,"probabilities":{"Heavy Rain":0.515,"Rainy":0.091,"Snowy":0.394}},"right":{"feature":"humidity_percent","threshold":87.45,"left":{"prediction":"Snowy","confidence":52.4,"probabilities":{"Heavy Rain":0.143,"Rainy":0.333,"Snowy":0.524}},"right":{"prediction":"Heavy Rain","confidence":44.0,"probabilities":{"Heavy Rain":0.44,"Rainy":0.24,"Snowy":0.32}}}},"right":{"feature":"humidity_percent","threshold":68.05,"left":{"feature":"humidity_percent","threshold":66.25,"left":{"prediction":"Rainy","confidence":41.8,"probabilities":{"Heavy Rain":0.239,"Rainy":0.418,"Snowy":0.343}},"right":{"prediction":"Rainy","confidence":56.5,"probabilities":{"Heavy Rain":0.304,"Rainy":0.565,"Snowy":0.13}}},"right":{"feature":"temperature_celsius","threshold":13.75,"left":{"prediction":"Heavy Rain","confidence":37.2,"probabilities":{"Heavy Rain":0.372,"Rainy":0.28,"Snowy":0.349}},"right":{"prediction":"Snowy","confidence":39.5,"probabilities":{"Heavy Rain":0.224,"Rainy":0.382,"Snowy":0.395}}}}},"right":{"feature":"humidity_percent","threshold":74.05,"left":{"feature":"temperature_celsius","threshold":2.15,"left":{"prediction":"Snowy","confidence":48.0,"probabilities":{"Heavy Rain":0.28,"Rainy":0.24,"Snowy":0.48}},"right":{"prediction":"Rainy","confidence":46.4,"probabilities":{"Heavy Rain":0.321,"Rainy":0.464,"Snowy":0.214}}},"right":{"feature":"humidity_percent","threshold":84.45,"left":{"feature":"precipitation_mm","threshold":9.95,"left":{"prediction":"Rainy","confidence":85.0,"probabilities":{"Heavy Rain":0.05,"Rainy":0.85,"Snowy":0.1}},"right":{"prediction":"Rainy","confidence":50.0,"probabilities":{"Heavy Rain":0.227,"Rainy":0.5,"Snowy":0.273}}},"right":{"feature":"precipitation_mm","threshold":9.65,"left":{"prediction":"Rainy","confidence":40.9,"probabilities":{"Heavy Rain":0.273,"Rainy":0.409,"Snowy":0.318}},"right":{"prediction":"Snowy","confidence":45.5,"probabilities":{"Heavy Rain":0.182,"Rainy":0.364,"Snowy":0.455}}}}}},"right":{"feature":"temperature_celsius","threshold":6.65,"left":{"feature":"humidity_percent","threshold":73.45,"left":{"prediction":"Heavy Rain","confidence":52.4,"probabilities":{"Heavy Rain":0.524,"Rainy":0.333,"Snowy":0.143}},"right":{"prediction":"Heavy Rain","confidence":56.2,"probabilities":{"Heavy Rain":0.562,"Rainy":0.125,"Snowy":0.312}}},"right":{"prediction":"Snowy","confidence":40.7,"probabilities":{"Heavy Rain":0.296,"Rainy":0.296,"Snowy":0.407}}}}};
+
+const FEAT_LABELS = {
+  temperature_celsius: 'Temperature',
+  humidity_percent: 'Humidity',
+  precipitation_mm: 'Precipitation'
+};
+const FEAT_UNITS = {
+  temperature_celsius: '°C',
+  humidity_percent: '%',
+  precipitation_mm: 'mm'
+};
+const CONDITION_ICONS = {
+  'Sunny': '☀️', 'Partly Cloudy': '⛅', 'Cloudy': '☁️',
+  'Overcast': '🌥️', 'Foggy': '🌫️', 'Rainy': '🌧️',
+  'Heavy Rain': '⛈️', 'Snowy': '❄️'
+};
+const CONDITION_COLORS = {
+  'Sunny': '#fbbf24', 'Partly Cloudy': '#93c5fd', 'Cloudy': '#94a3b8',
+  'Overcast': '#64748b', 'Foggy': '#cbd5e1', 'Rainy': '#60a5fa',
+  'Heavy Rain': '#3b82f6', 'Snowy': '#e0f2fe'
+};
+const BAR_PALETTE = [
+  '#38bdf8','#818cf8','#34d399','#fbbf24','#f87171','#a78bfa','#fb923c','#4ade80'
+];
+
+// ── Traverse tree ──────────────────────────────────────────────────────────
+function traverse(node, inputs, path = []) {
+  if (node.prediction !== undefined) {
+    path.push({ type: 'leaf', text: `→ Predict: ${node.prediction} (${node.confidence}% confidence)` });
+    return { prediction: node.prediction, confidence: node.confidence, probabilities: node.probabilities, path };
+  }
+  const val = inputs[node.feature];
+  const label = FEAT_LABELS[node.feature];
+  const unit = FEAT_UNITS[node.feature];
+  if (val <= node.threshold) {
+    path.push({ type: 'condition', text: `${label} (${val}${unit}) ≤ ${node.threshold}${unit} → go left` });
+    return traverse(node.left, inputs, path);
+  } else {
+    path.push({ type: 'condition', text: `${label} (${val}${unit}) > ${node.threshold}${unit} → go right` });
+    return traverse(node.right, inputs, path);
+  }
+}
+
+// ── UI helpers ──────────────────────────────────────────────────────────────
+function updateDisplay() {
+  document.getElementById('temp-val').textContent = parseFloat(document.getElementById('temp').value).toFixed(1) + '°C';
+  document.getElementById('humidity-val').textContent = parseFloat(document.getElementById('humidity').value).toFixed(1) + '%';
+  document.getElementById('precip-val').textContent = parseFloat(document.getElementById('precip').value).toFixed(1) + ' mm';
+}
+
+function predict() {
+  const inputs = {
+    temperature_celsius: parseFloat(document.getElementById('temp').value),
+    humidity_percent: parseFloat(document.getElementById('humidity').value),
+    precipitation_mm: parseFloat(document.getElementById('precip').value)
+  };
+  const result = traverse(TREE, inputs);
+
+  // Show result card
+  const rc = document.getElementById('result-card');
+  rc.style.display = 'block';
+  document.getElementById('result-icon').textContent = CONDITION_ICONS[result.prediction] || '🌡️';
+  document.getElementById('result-pred').textContent = result.prediction;
+  document.getElementById('result-conf').textContent = `Confidence: ${result.confidence}%`;
+
+  // Probability bars
+  const barsEl = document.getElementById('prob-bars');
+  barsEl.innerHTML = '';
+  const probs = result.probabilities;
+  const allClasses = Object.keys(CONDITION_ICONS);
+  const colorKeys = Object.keys(CONDITION_COLORS);
+
+  allClasses.forEach((cls, i) => {
+    const pct = probs[cls] ? (probs[cls] * 100).toFixed(1) : '0.0';
+    const color = CONDITION_COLORS[cls] || BAR_PALETTE[i % BAR_PALETTE.length];
+    const row = document.createElement('div');
+    row.className = 'prob-row';
+    row.innerHTML = `
+      <span class="prob-label">${CONDITION_ICONS[cls] || ''} ${cls}</span>
+      <div class="prob-bar-bg"><div class="prob-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="prob-pct">${pct}%</span>`;
+    barsEl.appendChild(row);
+  });
+
+  // Decision path
+  const pc = document.getElementById('path-card');
+  pc.style.display = 'block';
+  const stepsEl = document.getElementById('path-steps');
+  stepsEl.innerHTML = '';
+  result.path.forEach((step, i) => {
+    const el = document.createElement('div');
+    el.className = `path-step ${step.type}`;
+    el.innerHTML = `<div class="path-num">${i + 1}</div><div>${step.text}</div>`;
+    stepsEl.appendChild(el);
+  });
+}
+
+// ── Charts ──────────────────────────────────────────────────────────────────
+const DIST_DATA = {
+  labels: ['Snowy','Rainy','Overcast','Cloudy','Foggy','Sunny','Heavy Rain','Partly Cloudy'],
+  values: [632, 622, 449, 431, 412, 385, 301, 53]
+};
+const TEMP_DATA = {
+  labels: ['Sunny','Partly Cloudy','Cloudy','Rainy','Heavy Rain','Overcast','Foggy','Snowy'],
+  values: [13.2, 15.1, 10.4, 8.7, 9.1, 7.3, 6.2, 1.3]
+};
+
+const chartDefaults = {
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } },
+    y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#334155' } }
+  }
+};
+
+new Chart(document.getElementById('distChart'), {
+  type: 'bar',
+  data: {
+    labels: DIST_DATA.labels,
+    datasets: [{
+      data: DIST_DATA.values,
+      backgroundColor: DIST_DATA.labels.map(l => CONDITION_COLORS[l] || '#38bdf8'),
+      borderRadius: 4
+    }]
+  },
+  options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
+});
+
+new Chart(document.getElementById('tempChart'), {
+  type: 'bar',
+  data: {
+    labels: TEMP_DATA.labels,
+    datasets: [{
+      data: TEMP_DATA.values,
+      backgroundColor: TEMP_DATA.labels.map(l => CONDITION_COLORS[l] || '#818cf8'),
+      borderRadius: 4
+    }]
+  },
+  options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
+});
+
+// Init
+updateDisplay();
+</script>
+</body>
+</html>
